@@ -1,0 +1,1497 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Slow Peak Monitor Dashboard</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --line: #d8dde6;
+      --text: #172033;
+      --muted: #667085;
+      --accent: #0f766e;
+      --accent-2: #2563eb;
+      --warn: #b45309;
+      --danger: #b91c1c;
+      --soft-danger: rgba(185, 28, 28, 0.14);
+      --soft-warn: rgba(180, 83, 9, 0.14);
+      --shadow: 0 1px 2px rgba(16, 24, 40, 0.07);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: rgba(255, 255, 255, 0.96);
+      border-bottom: 1px solid var(--line);
+      backdrop-filter: blur(8px);
+    }
+
+    .topbar {
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) auto;
+      gap: 16px;
+      align-items: center;
+      max-width: 1500px;
+      margin: 0 auto;
+      padding: 14px 18px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 20px;
+      line-height: 1.2;
+      font-weight: 650;
+    }
+
+    .sub {
+      color: var(--muted);
+      margin-top: 3px;
+      font-size: 12px;
+    }
+
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    button, .file-label, select, input[type="text"] {
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--text);
+      border-radius: 6px;
+      min-height: 34px;
+      padding: 7px 10px;
+      font: inherit;
+      box-shadow: var(--shadow);
+    }
+
+    button, .file-label {
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    button.primary, .file-label.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    input[type="file"] { display: none; }
+
+    main {
+      max-width: 1500px;
+      margin: 0 auto;
+      padding: 16px 18px 34px;
+    }
+
+    .grid {
+      display: grid;
+      gap: 14px;
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(130px, 1fr));
+      gap: 10px;
+    }
+
+    .card, section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+    }
+
+    .card {
+      padding: 12px;
+      min-height: 82px;
+    }
+
+    .card .label {
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 8px;
+    }
+
+    .card .value {
+      font-size: 22px;
+      font-weight: 700;
+      line-height: 1.1;
+    }
+
+    .card .note {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 6px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    section {
+      padding: 14px;
+    }
+
+    .section-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    h2 {
+      font-size: 15px;
+      margin: 0;
+      font-weight: 700;
+    }
+
+    .filters {
+      display: grid;
+      grid-template-columns: minmax(220px, 1.1fr) minmax(520px, 2.2fr) minmax(220px, 1fr);
+      gap: 12px;
+      align-items: stretch;
+    }
+
+    .filter-box {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+    }
+
+    .filter-box label.title {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 650;
+      margin-bottom: 8px;
+    }
+
+    select[multiple] {
+      width: 100%;
+      min-height: 88px;
+      box-shadow: none;
+    }
+
+    .metric-list {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(150px, 1fr));
+      gap: 8px;
+    }
+
+    .check {
+      display: flex;
+      gap: 7px;
+      align-items: center;
+      min-height: 26px;
+      color: #344054;
+      white-space: nowrap;
+    }
+
+    .metric-help {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 17px;
+      height: 17px;
+      border-radius: 50%;
+      border: 1px solid var(--line);
+      color: var(--muted);
+      background: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: help;
+      flex: 0 0 auto;
+    }
+
+    .chart-wrap {
+      position: relative;
+      width: 100%;
+      height: 430px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      overflow: hidden;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .tooltip {
+      position: absolute;
+      pointer-events: none;
+      display: none;
+      max-width: 340px;
+      background: rgba(23, 32, 51, 0.94);
+      color: #fff;
+      padding: 8px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      line-height: 1.4;
+      z-index: 3;
+    }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: 0.9fr 1.1fr;
+      gap: 14px;
+    }
+
+    .three-col {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .table-wrap {
+      overflow: auto;
+      max-height: 360px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    th, td {
+      border-bottom: 1px solid #edf0f5;
+      padding: 7px 8px;
+      text-align: left;
+      vertical-align: top;
+      white-space: nowrap;
+    }
+
+    th {
+      position: sticky;
+      top: 0;
+      background: #f8fafc;
+      z-index: 1;
+      color: #475467;
+      font-weight: 700;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    td.wrap { white-space: normal; min-width: 220px; }
+    td.mono, .mono { font-family: Consolas, "Courier New", monospace; }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      padding: 2px 7px;
+      font-size: 12px;
+      background: #fff;
+      color: #344054;
+    }
+
+    .pill.danger {
+      border-color: rgba(185, 28, 28, 0.25);
+      background: var(--soft-danger);
+      color: var(--danger);
+    }
+
+    .pill.warn {
+      border-color: rgba(180, 83, 9, 0.25);
+      background: var(--soft-warn);
+      color: var(--warn);
+    }
+
+    .status {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .empty {
+      padding: 18px;
+      color: var(--muted);
+      border: 1px dashed var(--line);
+      border-radius: 8px;
+      background: #fff;
+    }
+
+    @media (max-width: 1100px) {
+      .topbar, .filters, .two-col, .three-col {
+        grid-template-columns: 1fr;
+      }
+      .controls { justify-content: flex-start; }
+      .cards { grid-template-columns: repeat(2, minmax(130px, 1fr)); }
+      .metric-list { grid-template-columns: repeat(2, minmax(150px, 1fr)); }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="topbar">
+      <div>
+        <h1>Slow Peak Monitor Dashboard</h1>
+        <div id="status" class="sub">Load monitor result files or a run folder.</div>
+      </div>
+      <div class="controls">
+        <select id="folderSelect" title="Recent loaded run folders saved in this browser">
+          <option value="">Recent folders</option>
+        </select>
+        <button id="reopenFolderBtn" type="button" title="Reopen the selected recent folder. Your browser may ask you to select it again for security.">Reopen</button>
+        <label class="file-label primary" for="folderInput">Open run folder</label>
+        <input id="folderInput" type="file" multiple webkitdirectory>
+        <label class="file-label" for="fileInput">Open files</label>
+        <input id="fileInput" type="file" multiple accept=".csv,.txt,.md">
+        <button id="clearBtn" type="button">Clear</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="grid">
+    <section>
+      <div class="filters">
+        <div class="filter-box">
+          <label class="title" for="runSelect">Result sets</label>
+          <select id="runSelect" multiple></select>
+        </div>
+        <div class="filter-box">
+          <label class="title">Timeline metrics</label>
+          <div id="metricList" class="metric-list"></div>
+        </div>
+        <div class="filter-box">
+          <label class="title">Precision controls</label>
+          <label class="check"><input id="logScale" type="checkbox" checked> Log scale</label>
+          <label class="check"><input id="showAnnotations" type="checkbox" checked> Show annotations</label>
+          <label class="check"><input id="showDetectedSpikes" type="checkbox" checked> Show detected spikes</label>
+          <label class="check"><input id="showComputedSpikes" type="checkbox" checked> Show computed spikes</label>
+          <input id="processFilter" type="text" placeholder="Filter process/event text">
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-title">
+        <h2>How To Read This Dashboard</h2>
+        <span class="status">Use this section when comparing your observed slow peaks with the captured data.</span>
+      </div>
+      <div class="two-col">
+        <div>
+          <p><b>Start with the timeline.</b> Keep Sample gap, Scheduler delay, Monitor loop, System query, Process query, and UI probe enabled. Tall spikes here mean the machine was slow to schedule normal work, process UI messages, or answer Windows process/performance queries.</p>
+          <p><b>Click a spike or annotation.</b> The Selected Time panel shows the nearest raw sample. Nearby Processes shows what was active around that point; Events shows warnings/errors near the same time.</p>
+          <p><b>Manual annotations matter.</b> A manual red band is when you personally felt the machine was unusable. If it lines up with sample gaps, query stalls, or UI delay, the monitor captured the same symptom.</p>
+        </div>
+        <div>
+          <p><b>Current hypothesis for the 11:09 run:</b> this does not look like RAM, CPU, or disk saturation. The strongest signal is Windows management/performance query stalling, possibly caused by a lower-level driver, security/VPN layer, or vendor service.</p>
+          <p><b>Ruled out for this run:</b> Windhawk was not running. Its service was stopped at the detected spike times, so it should not be treated as a live suspect for this dataset.</p>
+          <p><b>Most useful next tests:</b> compare one Chrome Incognito/extensions-disabled run and one VPN-disconnected run if possible. If one test removes the spikes, that component becomes the likely owner.</p>
+          <p><b>Useful filters:</b> try <span class="mono">chrome</span>, <span class="mono">MsMpEng</span>, <span class="mono">MsSense</span>, <span class="mono">SSLVpnClient</span>, <span class="mono">IDBWM</span>, <span class="mono">WmiPrvSE</span>, and <span class="mono">logioptionsplus</span>.</p>
+        </div>
+      </div>
+    </section>
+
+    <div id="cards" class="cards"></div>
+
+    <section>
+      <div class="section-title">
+        <h2>Timeline</h2>
+        <div id="timelineStatus" class="status"></div>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="timeline"></canvas>
+        <div id="tooltip" class="tooltip"></div>
+      </div>
+    </section>
+
+    <div class="two-col">
+      <section>
+        <div class="section-title">
+          <h2>Spikes And Annotations</h2>
+          <span class="status">Click a row to inspect nearby data.</span>
+        </div>
+        <div id="spikeTable" class="table-wrap"></div>
+      </section>
+
+      <section>
+        <div class="section-title">
+          <h2>Selected Time</h2>
+          <span id="selectedStatus" class="status"></span>
+        </div>
+        <div id="sampleDetails"></div>
+      </section>
+    </div>
+
+    <div class="three-col">
+      <section>
+        <div class="section-title">
+          <h2>Process Analysis</h2>
+          <span class="status">Aggregated across active runs.</span>
+        </div>
+        <div id="processTable" class="table-wrap"></div>
+      </section>
+
+      <section>
+        <div class="section-title">
+          <h2>Nearby Processes</h2>
+          <span class="status">Around selected time.</span>
+        </div>
+        <div id="nearProcessTable" class="table-wrap"></div>
+      </section>
+
+      <section>
+        <div class="section-title">
+          <h2>Events</h2>
+          <span class="status">Warnings and errors.</span>
+        </div>
+        <div id="eventTable" class="table-wrap"></div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    const state = {
+      runs: new Map(),
+      selectedRuns: new Set(),
+      selectedTime: null,
+      hoverTime: null,
+      chartPoints: [],
+      chartBounds: null,
+      sort: {},
+      recentFolders: [],
+      folderHandles: new Map()
+    };
+
+    const storageKeys = {
+      recentFolders: "slowPeakDashboard.recentFolders.v1",
+      lastFolder: "slowPeakDashboard.lastFolder.v1",
+      selectedRuns: "slowPeakDashboard.selectedRuns.v1"
+    };
+
+    const fileTypes = {
+      "metrics.csv": "metrics",
+      "spikes.csv": "spikes",
+      "processes.csv": "processes",
+      "events.csv": "events",
+      "annotations.csv": "annotations",
+      "services-on-spikes.csv": "services",
+      "commands-on-spikes.csv": "commands",
+      "startup-info.txt": "startup",
+      "summary.md": "summary"
+    };
+
+    const metricDefs = [
+      {
+        id: "sampleGapMs",
+        label: "Sample gap ms",
+        color: "#b91c1c",
+        value: r => toNum(r.SampleGapSeconds) * 1000,
+        selected: true,
+        help: "Actual elapsed time between two monitor samples, converted from seconds to milliseconds. The script aims for 10 seconds; much higher values mean the monitor was not scheduled or could not run for that period."
+      },
+      {
+        id: "schedulerDelay",
+        label: "Scheduler delay ms",
+        color: "#dc2626",
+        value: r => toNum(r.SchedulerDelayMs),
+        selected: true,
+        help: "How late a sample started compared with its expected next start time. Calculated as actual start time minus expected start time. High values indicate Windows scheduling or whole-system responsiveness delay."
+      },
+      {
+        id: "loop",
+        label: "Monitor loop ms",
+        color: "#7c2d12",
+        value: r => toNum(r.LoopMs),
+        selected: true,
+        help: "How long the monitor needed to collect one sample and write it. High values mean one or more Windows queries, file writes, or responsiveness checks blocked during that sample."
+      },
+      {
+        id: "ui",
+        label: "UI probe ms",
+        color: "#9333ea",
+        value: r => toNum(r.UiProbeMaxDelayMs),
+        selected: true,
+        help: "Delay observed by the hidden UI message-loop timer. It expects a tick about once per second; this value is the worst extra delay since the previous sample. High values indicate desktop/UI message processing lag."
+      },
+      {
+        id: "fg",
+        label: "Foreground ms",
+        color: "#4f46e5",
+        value: r => toNum(r.ForegroundResponseMs),
+        selected: false,
+        help: "Time for the active foreground window to answer a harmless WM_NULL message via SendMessageTimeout. High values, or false foreground responsiveness in the tables, indicate the active app UI thread was not answering quickly."
+      },
+      {
+        id: "system",
+        label: "System query ms",
+        color: "#0f766e",
+        value: r => toNum(r.SystemQueryMs),
+        selected: true,
+        help: "Time spent querying Windows system performance counters for CPU, memory, disk, and scheduler data through CIM/WMI. High values suggest Windows performance/management infrastructure is stalling."
+      },
+      {
+        id: "process",
+        label: "Process query ms",
+        color: "#2563eb",
+        value: r => toNum(r.ProcessQueryMs),
+        selected: true,
+        help: "Time spent collecting process snapshots and process performance counters. High values explain why Task Manager or process enumeration can open very slowly during a peak."
+      },
+      {
+        id: "input",
+        label: "Win input delay ms",
+        color: "#be185d",
+        value: r => toNum(r.UserInputDelaySessionMaxMs),
+        selected: false,
+        help: "Windows Local Session Manager User Input Delay counter, when available. It reports maximum input delay for the session/process. Blank values mean Windows did not return this counter on that sample."
+      },
+      {
+        id: "cpu",
+        label: "CPU %",
+        color: "#16a34a",
+        value: r => toNum(r.CpuPct),
+        selected: false,
+        help: "Total CPU utilization from Windows processor performance counters. If responsiveness metrics spike while CPU stays low, the issue is not ordinary CPU saturation."
+      },
+      {
+        id: "mem",
+        label: "Mem commit %",
+        color: "#0891b2",
+        value: r => toNum(r.CommitUsedPct),
+        selected: false,
+        help: "Committed memory as a percentage of the commit limit. If this stays low during a slow peak, the machine is not under normal memory pressure."
+      },
+      {
+        id: "disk",
+        label: "Disk queue",
+        color: "#b45309",
+        value: r => toNum(r.DiskQueue),
+        selected: false,
+        help: "Average physical disk queue length. Sustained values above about 2 can indicate disk bottlenecking. In the captured run this stayed at 0 during spikes."
+      },
+      {
+        id: "pages",
+        label: "Pages/sec",
+        color: "#64748b",
+        value: r => toNum(r.PagesPerSec),
+        selected: false,
+        help: "Windows memory paging rate. High values can indicate memory pressure or heavy paging. Low values during a peak make RAM pressure less likely."
+      }
+    ];
+
+    const $ = id => document.getElementById(id);
+
+    init();
+
+    function init() {
+      loadLocalPreferences();
+      renderFolderSelect();
+      renderMetricList();
+      $("folderInput").addEventListener("change", e => loadFiles([...e.target.files]));
+      $("fileInput").addEventListener("change", e => loadFiles([...e.target.files]));
+      $("folderSelect").addEventListener("change", () => {
+        localStorage.setItem(storageKeys.lastFolder, $("folderSelect").value || "");
+      });
+      $("reopenFolderBtn").addEventListener("click", reopenSelectedFolder);
+      $("runSelect").addEventListener("change", () => {
+        state.selectedRuns = new Set([...$("runSelect").selectedOptions].map(o => o.value));
+        saveSelectedRuns();
+        redrawAll();
+      });
+      $("clearBtn").addEventListener("click", clearAll);
+      $("logScale").addEventListener("change", redrawAll);
+      $("showAnnotations").addEventListener("change", redrawAll);
+      $("showDetectedSpikes").addEventListener("change", redrawAll);
+      $("showComputedSpikes").addEventListener("change", redrawAll);
+      $("processFilter").addEventListener("input", redrawTables);
+
+      const canvas = $("timeline");
+      canvas.addEventListener("mousemove", onChartMove);
+      canvas.addEventListener("mouseleave", () => { $("tooltip").style.display = "none"; });
+      canvas.addEventListener("click", onChartClick);
+      window.addEventListener("resize", drawTimeline);
+      redrawAll();
+    }
+
+    function loadLocalPreferences() {
+      try {
+        state.recentFolders = JSON.parse(localStorage.getItem(storageKeys.recentFolders) || "[]");
+        if (!Array.isArray(state.recentFolders)) state.recentFolders = [];
+      } catch {
+        state.recentFolders = [];
+      }
+    }
+
+    function renderFolderSelect() {
+      const select = $("folderSelect");
+      const last = localStorage.getItem(storageKeys.lastFolder) || "";
+      select.innerHTML = `<option value="">Recent folders</option>`;
+      state.recentFolders.forEach(folder => {
+        const opt = document.createElement("option");
+        opt.value = folder.id;
+        opt.textContent = folder.label;
+        opt.title = folder.path || folder.label;
+        opt.selected = folder.id === last;
+        select.appendChild(opt);
+      });
+    }
+
+    function rememberFolder(id, label, path) {
+      if (!id || !label) return;
+      state.recentFolders = state.recentFolders.filter(f => f.id !== id);
+      state.recentFolders.unshift({ id, label, path: path || label, lastOpened: new Date().toISOString() });
+      state.recentFolders = state.recentFolders.slice(0, 12);
+      localStorage.setItem(storageKeys.recentFolders, JSON.stringify(state.recentFolders));
+      localStorage.setItem(storageKeys.lastFolder, id);
+      renderFolderSelect();
+    }
+
+    function saveSelectedRuns() {
+      localStorage.setItem(storageKeys.selectedRuns, JSON.stringify([...state.selectedRuns]));
+    }
+
+    async function reopenSelectedFolder() {
+      const selected = $("folderSelect").value;
+      const record = state.recentFolders.find(f => f.id === selected);
+      if (!record) {
+        $("folderInput").click();
+        return;
+      }
+
+      if ("showDirectoryPicker" in window && window.isSecureContext) {
+        try {
+          const handle = await window.showDirectoryPicker({ id: "slow-peak-monitor-runs", mode: "read" });
+          const files = await filesFromDirectoryHandle(handle);
+          rememberFolder(handle.name, handle.name, handle.name);
+          await loadFiles(files);
+          return;
+        } catch (err) {
+          if (err && err.name === "AbortError") return;
+        }
+      }
+
+      setStatus(`Select "${record.label}" again so the browser can grant file access.`);
+      $("folderInput").click();
+    }
+
+    async function filesFromDirectoryHandle(rootHandle) {
+      const out = [];
+      async function walk(handle, path) {
+        for await (const entry of handle.values()) {
+          const childPath = path ? `${path}/${entry.name}` : entry.name;
+          if (entry.kind === "file") {
+            const file = await entry.getFile();
+            out.push({
+              name: file.name,
+              webkitRelativePath: `${rootHandle.name}/${childPath}`,
+              text: () => file.text()
+            });
+          } else if (entry.kind === "directory") {
+            await walk(entry, childPath);
+          }
+        }
+      }
+      await walk(rootHandle, "");
+      return out;
+    }
+
+    function renderMetricList() {
+      const root = $("metricList");
+      root.innerHTML = "";
+      metricDefs.forEach(def => {
+        const label = document.createElement("label");
+        label.className = "check";
+        label.title = def.help;
+        label.innerHTML = `<input type="checkbox" data-metric="${escapeHtml(def.id)}" ${def.selected ? "checked" : ""}> <span style="color:${def.color}">${escapeHtml(def.label)}</span> <span class="metric-help" title="${escapeHtml(def.help)}">?</span>`;
+        label.querySelector("input").addEventListener("change", redrawAll);
+        root.appendChild(label);
+      });
+    }
+
+    async function loadFiles(files) {
+      if (!files.length) return;
+      setStatus(`Loading ${files.length} file(s)...`);
+      const folderInfo = folderInfoFromFiles(files);
+      for (const file of files) {
+        const baseName = file.name.toLowerCase();
+        const type = fileTypes[baseName];
+        if (!type) continue;
+        const runKey = runKeyFromFile(file);
+        const run = ensureRun(runKey);
+        const text = await file.text();
+        run.files.push({ name: file.name, path: file.webkitRelativePath || file.name, type });
+        if (type === "startup" || type === "summary") {
+          run[type] = text;
+        } else {
+          const rows = parseCsv(text).map(row => normalizeRow(row, runKey, type));
+          run[type].push(...rows);
+        }
+      }
+      if (folderInfo) rememberFolder(folderInfo.id, folderInfo.label, folderInfo.path);
+      rebuildRunSelect();
+      saveSelectedRuns();
+      redrawAll();
+    }
+
+    function folderInfoFromFiles(files) {
+      const withPath = files.find(file => file.webkitRelativePath);
+      if (!withPath) return { id: "selected-files", label: "Selected files", path: "Selected files" };
+      const firstPath = withPath.webkitRelativePath;
+      const parts = firstPath.split(/[\\/]+/).filter(Boolean);
+      if (!parts.length) return null;
+      const root = parts[0];
+      const runPart = parts.find(p => /^run-\d{8}-\d{6}$/i.test(p));
+      const label = runPart || root;
+      return { id: label, label, path: root };
+    }
+
+    function clearAll() {
+      state.runs.clear();
+      state.selectedRuns.clear();
+      state.selectedTime = null;
+      $("folderInput").value = "";
+      $("fileInput").value = "";
+      rebuildRunSelect();
+      redrawAll();
+    }
+
+    function ensureRun(key) {
+      if (!state.runs.has(key)) {
+        state.runs.set(key, {
+          key,
+          files: [],
+          metrics: [],
+          spikes: [],
+          processes: [],
+          events: [],
+          annotations: [],
+          services: [],
+          commands: [],
+          startup: "",
+          summary: ""
+        });
+        state.selectedRuns.add(key);
+      }
+      return state.runs.get(key);
+    }
+
+    function runKeyFromFile(file) {
+      const path = file.webkitRelativePath || file.name;
+      const parts = path.split(/[\\/]+/).filter(Boolean);
+      const runPart = parts.find(p => /^run-\d{8}-\d{6}$/i.test(p));
+      if (runPart) return runPart;
+      if (parts.length > 1) return parts.slice(0, -1).join("/");
+      return "selected-files";
+    }
+
+    function rebuildRunSelect() {
+      const select = $("runSelect");
+      select.innerHTML = "";
+      let persisted = [];
+      try { persisted = JSON.parse(localStorage.getItem(storageKeys.selectedRuns) || "[]"); } catch {}
+      const persistedSet = new Set(Array.isArray(persisted) ? persisted : []);
+      [...state.runs.keys()].sort().forEach(key => {
+        const run = state.runs.get(key);
+        const opt = document.createElement("option");
+        opt.value = key;
+        opt.selected = state.selectedRuns.has(key) || persistedSet.has(key);
+        if (opt.selected) state.selectedRuns.add(key);
+        opt.textContent = `${key} (${run.metrics.length} samples)`;
+        select.appendChild(opt);
+      });
+    }
+
+    function activeRuns() {
+      return [...state.selectedRuns].map(key => state.runs.get(key)).filter(Boolean);
+    }
+
+    function allActive(type) {
+      return activeRuns().flatMap(run => run[type] || []);
+    }
+
+    function normalizeRow(row, runKey, type) {
+      const copy = { ...row, _run: runKey, _type: type };
+      const timeValue = row.Timestamp || row.StartTime || row.TimeCreated || "";
+      const t = parseTime(timeValue);
+      copy._time = t;
+      copy._ms = t ? t.getTime() : null;
+      if (row.EndTime) {
+        const end = parseTime(row.EndTime);
+        copy._endTime = end;
+        copy._endMs = end ? end.getTime() : null;
+      }
+      return copy;
+    }
+
+    function parseTime(value) {
+      if (!value) return null;
+      const text = String(value).trim();
+      const ms = Date.parse(text);
+      if (!Number.isNaN(ms)) return new Date(ms);
+      return null;
+    }
+
+    function toNum(value) {
+      if (value === null || value === undefined || value === "") return null;
+      if (typeof value === "number") return Number.isFinite(value) ? value : null;
+      let text = String(value).trim();
+      if (!text) return null;
+      text = text.replace(/\s/g, "").replace(",", ".");
+      const n = Number(text);
+      return Number.isFinite(n) ? n : null;
+    }
+
+    function parseCsv(text) {
+      const rows = [];
+      let row = [];
+      let cell = "";
+      let inQuotes = false;
+      for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+        const next = text[i + 1];
+        if (inQuotes) {
+          if (ch === '"' && next === '"') {
+            cell += '"';
+            i++;
+          } else if (ch === '"') {
+            inQuotes = false;
+          } else {
+            cell += ch;
+          }
+        } else {
+          if (ch === '"') {
+            inQuotes = true;
+          } else if (ch === ",") {
+            row.push(cell);
+            cell = "";
+          } else if (ch === "\n") {
+            row.push(cell);
+            rows.push(row);
+            row = [];
+            cell = "";
+          } else if (ch !== "\r") {
+            cell += ch;
+          }
+        }
+      }
+      if (cell.length || row.length) {
+        row.push(cell);
+        rows.push(row);
+      }
+      if (!rows.length) return [];
+      const headers = rows.shift().map((h, index) => {
+        const clean = h.trim();
+        return index === 0 ? clean.replace(/^\uFEFF/, "") : clean;
+      });
+      return rows
+        .filter(r => r.some(v => String(v).trim() !== ""))
+        .map(r => {
+          const out = {};
+          headers.forEach((h, i) => { out[h] = r[i] === undefined ? "" : r[i]; });
+          return out;
+        });
+    }
+
+    function redrawAll() {
+      renderCards();
+      drawTimeline();
+      redrawTables();
+      updateStatus();
+    }
+
+    function redrawTables() {
+      renderSpikeTable();
+      renderSampleDetails();
+      renderProcessTable();
+      renderNearbyProcessTable();
+      renderEventTable();
+    }
+
+    function updateStatus() {
+      const runs = activeRuns();
+      const samples = allActive("metrics").length;
+      const spikes = allSpikesAndAnnotations().length;
+      if (!runs.length) {
+        setStatus("Load monitor result files or a run folder.");
+      } else {
+        setStatus(`${runs.length} result set(s), ${samples} samples, ${spikes} spike/annotation rows loaded.`);
+      }
+    }
+
+    function setStatus(text) {
+      $("status").textContent = text;
+    }
+
+    function selectedMetricDefs() {
+      const selected = new Set([...document.querySelectorAll("[data-metric]:checked")].map(i => i.dataset.metric));
+      return metricDefs.filter(d => selected.has(d.id));
+    }
+
+    function renderCards() {
+      const metrics = allActive("metrics").filter(r => r._ms);
+      const detected = allActive("spikes").filter(r => r._ms);
+      const annotations = allActive("annotations").filter(r => r._ms);
+      const computed = computedSpikeRows(metrics);
+      const root = $("cards");
+
+      const maxGap = maxRow(metrics, r => toNum(r.SampleGapSeconds));
+      const maxLoop = maxRow(metrics, r => toNum(r.LoopMs));
+      const maxUi = maxRow(metrics, r => toNum(r.UiProbeMaxDelayMs));
+      const maxSystem = maxRow(metrics, r => toNum(r.SystemQueryMs));
+      const lowResourceLag = metrics.filter(r => String(r.LowResourceLag).toLowerCase() === "true").length;
+
+      const cards = [
+        ["Runs", activeRuns().length, `${metrics.length} samples`],
+        ["Detected spikes", detected.length, `${computed.length} computed anomalies`],
+        ["Manual notes", annotations.length, annotations[0] ? fmtTime(annotations[0]._time) : ""],
+        ["Max sample gap", fmtNumber(maxGap.value, "s"), maxGap.row ? fmtTime(maxGap.row._time) : ""],
+        ["Max loop", fmtMs(maxLoop.value), maxLoop.row ? fmtTime(maxLoop.row._time) : ""],
+        ["Max UI delay", fmtMs(maxUi.value), maxUi.row ? fmtTime(maxUi.row._time) : ""],
+        ["Max system query", fmtMs(maxSystem.value), maxSystem.row ? fmtTime(maxSystem.row._time) : ""],
+        ["Low-resource lag", lowResourceLag, "CPU <= 10% and commit <= 50%"]
+      ];
+
+      root.innerHTML = cards.map(([label, value, note]) => `
+        <div class="card">
+          <div class="label">${escapeHtml(label)}</div>
+          <div class="value">${escapeHtml(String(value ?? ""))}</div>
+          <div class="note">${escapeHtml(note || "")}</div>
+        </div>
+      `).join("");
+    }
+
+    function maxRow(rows, valueFn) {
+      let best = { row: null, value: null };
+      rows.forEach(row => {
+        const value = valueFn(row);
+        if (value === null || !Number.isFinite(value)) return;
+        if (best.value === null || value > best.value) best = { row, value };
+      });
+      return best;
+    }
+
+    function drawTimeline() {
+      const canvas = $("timeline");
+      const ctx = canvas.getContext("2d");
+      const rect = canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = Math.max(1, Math.floor(rect.width * dpr));
+      canvas.height = Math.max(1, Math.floor(rect.height * dpr));
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, rect.width, rect.height);
+
+      const metrics = allActive("metrics").filter(r => r._ms).sort((a, b) => a._ms - b._ms);
+      const defs = selectedMetricDefs();
+      if (!metrics.length || !defs.length) {
+        state.chartPoints = [];
+        state.chartBounds = null;
+        drawEmptyChart(ctx, rect.width, rect.height);
+        $("timelineStatus").textContent = "No active metrics.";
+        return;
+      }
+
+      const minX = metrics[0]._ms;
+      const maxX = metrics[metrics.length - 1]._ms;
+      const margin = { left: 62, right: 20, top: 18, bottom: 38 };
+      const width = rect.width - margin.left - margin.right;
+      const height = rect.height - margin.top - margin.bottom;
+      const logScale = $("logScale").checked;
+
+      let maxY = 0;
+      const series = defs.map(def => {
+        const points = metrics.map(row => {
+          const raw = def.value(row);
+          if (raw === null || !Number.isFinite(raw)) return null;
+          const yValue = logScale ? Math.log10(Math.max(0, raw) + 1) : raw;
+          maxY = Math.max(maxY, yValue);
+          return { row, raw, yValue, def };
+        }).filter(Boolean);
+        return { def, points };
+      });
+      if (maxY <= 0) maxY = 1;
+
+      const xFor = ms => margin.left + ((ms - minX) / Math.max(1, maxX - minX)) * width;
+      const yFor = value => margin.top + height - (value / maxY) * height;
+
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, rect.width, rect.height);
+      drawGrid(ctx, margin, width, height, minX, maxX, maxY, logScale);
+
+      if ($("showAnnotations").checked) {
+        allActive("annotations").forEach(a => drawAnnotationBand(ctx, a, xFor, margin, height));
+      }
+
+      if ($("showDetectedSpikes").checked) {
+        allActive("spikes").forEach(s => drawSpikeLine(ctx, s, xFor, margin, height, "#b91c1c"));
+      }
+
+      if ($("showComputedSpikes").checked) {
+        computedSpikeRows(metrics).forEach(s => drawSpikeLine(ctx, s, xFor, margin, height, "#b45309"));
+      }
+
+      state.chartPoints = [];
+      series.forEach(s => {
+        ctx.beginPath();
+        ctx.lineWidth = 1.8;
+        ctx.strokeStyle = s.def.color;
+        let started = false;
+        s.points.forEach(p => {
+          const x = xFor(p.row._ms);
+          const y = yFor(p.yValue);
+          state.chartPoints.push({ x, y, row: p.row, raw: p.raw, def: s.def });
+          if (!started) {
+            ctx.moveTo(x, y);
+            started = true;
+          } else {
+            ctx.lineTo(x, y);
+          }
+        });
+        ctx.stroke();
+      });
+
+      if (state.selectedTime) {
+        const x = xFor(state.selectedTime.getTime());
+        ctx.strokeStyle = "#172033";
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(x, margin.top);
+        ctx.lineTo(x, margin.top + height);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      drawLegend(ctx, defs, rect.width, margin);
+      state.chartBounds = { minX, maxX, margin, width, height, maxY, logScale, xFor, yFor };
+      $("timelineStatus").textContent = `${fmtTime(new Date(minX))} to ${fmtTime(new Date(maxX))}`;
+    }
+
+    function drawEmptyChart(ctx, width, height) {
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, width, height);
+      ctx.fillStyle = "#667085";
+      ctx.font = "14px Segoe UI, Arial";
+      ctx.fillText("Load monitor CSV files to render the timeline.", 22, 34);
+    }
+
+    function drawGrid(ctx, margin, width, height, minX, maxX, maxY, logScale) {
+      ctx.strokeStyle = "#edf0f5";
+      ctx.fillStyle = "#667085";
+      ctx.font = "11px Segoe UI, Arial";
+      ctx.lineWidth = 1;
+
+      for (let i = 0; i <= 5; i++) {
+        const y = margin.top + (height * i / 5);
+        ctx.beginPath();
+        ctx.moveTo(margin.left, y);
+        ctx.lineTo(margin.left + width, y);
+        ctx.stroke();
+        const value = maxY * (1 - i / 5);
+        const label = logScale ? fmtNumber(Math.pow(10, value) - 1) : fmtNumber(value);
+        ctx.fillText(label, 8, y + 4);
+      }
+
+      for (let i = 0; i <= 6; i++) {
+        const x = margin.left + (width * i / 6);
+        const ms = minX + ((maxX - minX) * i / 6);
+        ctx.beginPath();
+        ctx.moveTo(x, margin.top);
+        ctx.lineTo(x, margin.top + height);
+        ctx.stroke();
+        ctx.fillText(fmtTime(new Date(ms)), x - 24, margin.top + height + 24);
+      }
+
+      ctx.strokeStyle = "#d8dde6";
+      ctx.strokeRect(margin.left, margin.top, width, height);
+    }
+
+    function drawAnnotationBand(ctx, a, xFor, margin, height) {
+      if (!a._ms) return;
+      const start = xFor(a._ms);
+      const end = xFor(a._endMs || (a._ms + 120000));
+      const x = Math.min(start, end);
+      const w = Math.max(3, Math.abs(end - start));
+      ctx.fillStyle = "rgba(185, 28, 28, 0.12)";
+      ctx.fillRect(x, margin.top, w, height);
+      ctx.fillStyle = "#b91c1c";
+      ctx.font = "11px Segoe UI, Arial";
+      ctx.fillText("manual", x + 4, margin.top + 14);
+    }
+
+    function drawSpikeLine(ctx, s, xFor, margin, height, color) {
+      if (!s._ms) return;
+      const x = xFor(s._ms);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x, margin.top);
+      ctx.lineTo(x, margin.top + height);
+      ctx.stroke();
+    }
+
+    function drawLegend(ctx, defs, width, margin) {
+      let x = margin.left + 6;
+      let y = margin.top + 16;
+      ctx.font = "11px Segoe UI, Arial";
+      defs.forEach(def => {
+        const labelWidth = ctx.measureText(def.label).width + 28;
+        if (x + labelWidth > width - 20) {
+          x = margin.left + 6;
+          y += 18;
+        }
+        ctx.fillStyle = def.color;
+        ctx.fillRect(x, y - 8, 16, 3);
+        ctx.fillStyle = "#344054";
+        ctx.fillText(def.label, x + 22, y - 4);
+        x += labelWidth;
+      });
+    }
+
+    function onChartMove(e) {
+      if (!state.chartBounds || !state.chartPoints.length) return;
+      const rect = $("timeline").getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      const nearest = nearestPoint(x, y);
+      if (!nearest) return;
+      const tip = $("tooltip");
+      tip.style.display = "block";
+      tip.style.left = `${Math.min(rect.width - 350, x + 12)}px`;
+      tip.style.top = `${Math.max(8, y + 12)}px`;
+      tip.innerHTML = `
+        <b>${escapeHtml(nearest.def.label)}</b><br>
+        ${escapeHtml(fmtDateTime(nearest.row._time))}<br>
+        value: ${escapeHtml(fmtNumber(nearest.raw))}<br>
+        run: ${escapeHtml(nearest.row._run)}<br>
+        <span style="color:#cbd5e1">${escapeHtml(nearest.def.help)}</span>
+      `;
+    }
+
+    function onChartClick(e) {
+      if (!state.chartBounds || !state.chartPoints.length) return;
+      const rect = $("timeline").getBoundingClientRect();
+      const nearest = nearestPoint(e.clientX - rect.left, e.clientY - rect.top);
+      if (!nearest) return;
+      state.selectedTime = nearest.row._time;
+      redrawAll();
+    }
+
+    function nearestPoint(x, y) {
+      let best = null;
+      let bestDist = Infinity;
+      state.chartPoints.forEach(p => {
+        const dx = p.x - x;
+        const dy = p.y - y;
+        const dist = dx * dx + dy * dy;
+        if (dist < bestDist) {
+          bestDist = dist;
+          best = p;
+        }
+      });
+      return bestDist < 2600 ? best : null;
+    }
+
+    function allSpikesAndAnnotations() {
+      const out = [];
+      if ($("showDetectedSpikes")?.checked !== false) {
+        allActive("spikes").forEach(s => out.push({ ...s, _source: "detected", _sortMs: s._ms }));
+      }
+      if ($("showAnnotations")?.checked !== false) {
+        allActive("annotations").forEach(a => out.push({ ...a, _source: "manual", _sortMs: a._ms }));
+      }
+      if ($("showComputedSpikes")?.checked !== false) {
+        computedSpikeRows(allActive("metrics")).forEach(c => out.push({ ...c, _source: "computed", _sortMs: c._ms }));
+      }
+      return out.filter(r => r._sortMs).sort((a, b) => a._sortMs - b._sortMs);
+    }
+
+    function computedSpikeRows(metrics) {
+      const rows = [];
+      metrics.forEach(r => {
+        const reasons = [];
+        const gap = toNum(r.SampleGapSeconds);
+        const scheduler = toNum(r.SchedulerDelayMs);
+        const loop = toNum(r.LoopMs);
+        const ui = toNum(r.UiProbeMaxDelayMs);
+        const process = toNum(r.ProcessQueryMs);
+        const system = toNum(r.SystemQueryMs);
+        const disk = toNum(r.DiskQueue);
+        if (gap !== null && gap > 20) reasons.push("SampleGap");
+        if (scheduler !== null && scheduler > 3000) reasons.push("SchedulerDelay");
+        if (loop !== null && loop > 20000) reasons.push("MonitorLoop");
+        if (ui !== null && ui > 3000) reasons.push("UiMessageDelay");
+        if (process !== null && process > 5000) reasons.push("ProcessEnumeration");
+        if (system !== null && system > 5000) reasons.push("CimPerfQuery");
+        if (disk !== null && disk > 2) reasons.push("DiskQueue");
+        if (String(r.ForegroundResponsive).toLowerCase() === "false") reasons.push("ForegroundNotResponding");
+        if (reasons.length) {
+          rows.push({
+            ...r,
+            Reasons: reasons.join(";"),
+            Label: "computed_anomaly",
+            Source: "computed"
+          });
+        }
+      });
+      return rows;
+    }
+
+    function renderSpikeTable() {
+      const rows = allSpikesAndAnnotations().map(row => {
+        const source = row._source || row.Source || "detected";
+        const time = row._time || parseTime(row.Timestamp || row.StartTime);
+        const note = row.Note || row.Reasons || row.SpikeReasons || row.Label || "";
+        const cpu = row.CpuPct || "";
+        const mem = row.CommitUsedPct || "";
+        const gap = row.SampleGapSeconds || "";
+        const loop = row.LoopMs || "";
+        const ui = row.UiProbeMaxDelayMs || "";
+        const fg = row.ForegroundProcess || "";
+        return { source, time, note, cpu, mem, gap, loop, ui, fg, raw: row };
+      });
+
+      renderTable("spikeTable", rows, [
+        ["time", "Time", r => fmtDateTime(r.time), "mono"],
+        ["source", "Source", r => `<span class="pill ${r.source === "manual" ? "danger" : r.source === "computed" ? "warn" : ""}">${escapeHtml(r.source)}</span>`],
+        ["note", "Reason / note", r => escapeHtml(r.note), "wrap"],
+        ["cpu", "CPU %", r => escapeHtml(r.cpu)],
+        ["mem", "Mem %", r => escapeHtml(r.mem)],
+        ["gap", "Gap s", r => escapeHtml(r.gap)],
+        ["loop", "Loop ms", r => escapeHtml(r.loop)],
+        ["ui", "UI ms", r => escapeHtml(r.ui)],
+        ["fg", "Foreground", r => escapeHtml(r.fg)]
+      ], row => {
+        state.selectedTime = row.time;
+        redrawAll();
+      });
+    }
+
+    function renderSampleDetails() {
+      const metrics = allActive("metrics").filter(r => r._ms).sort((a, b) => a._ms - b._ms);
+      if (!metrics.length) {
+        $("sampleDetails").innerHTML = `<div class="empty">No metrics loaded.</div>`;
+        $("selectedStatus").textContent = "";
+        return;
+      }
+
+      if (!state.selectedTime) state.selectedTime = metrics[0]._time;
+      const selected = nearestByTime(metrics, state.selectedTime.getTime());
+      $("selectedStatus").textContent = selected ? `${selected._run} | ${fmtDateTime(selected._time)}` : "";
+      if (!selected) {
+        $("sampleDetails").innerHTML = `<div class="empty">No sample selected.</div>`;
+        return;
+      }
+
+      const keys = [
+        ["Sample gap", fmtNumber(toNum(selected.SampleGapSeconds), "s")],
+        ["Scheduler delay", fmtMs(toNum(selected.SchedulerDelayMs))],
+        ["Loop", fmtMs(toNum(selected.LoopMs))],
+        ["UI probe max", fmtMs(toNum(selected.UiProbeMaxDelayMs))],
+        ["Foreground response", fmtMs(toNum(selected.ForegroundResponseMs))],
+        ["System query", fmtMs(toNum(selected.SystemQueryMs))],
+        ["Process query", fmtMs(toNum(selected.ProcessQueryMs))],
+        ["CPU", fmtNumber(toNum(selected.CpuPct), "%")],
+        ["Memory commit", fmtNumber(toNum(selected.CommitUsedPct), "%")],
+        ["Disk queue", fmtNumber(toNum(selected.DiskQueue))],
+        ["Disk MB/s", fmtNumber(toNum(selected.DiskMBps))],
+        ["Pages/sec", fmtNumber(toNum(selected.PagesPerSec))],
+        ["Foreground", selected.ForegroundProcess || ""],
+        ["Spike reasons", selected.SpikeReasons || ""]
+      ];
+
+      $("sampleDetails").innerHTML = `
+        <div class="table-wrap" style="max-height:360px">
+          <table>
+            <tbody>
+              ${keys.map(([k, v]) => `<tr><th>${escapeHtml(k)}</th><td>${escapeHtml(v || "")}</td></tr>`).join("")}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    function renderProcessTable() {
+      const filter = $("processFilter").value.trim().toLowerCase();
+      const grouped = new Map();
+      allActive("processes").forEach(row => {
+        const name = row.Process || "";
+        if (filter && !JSON.stringify(row).toLowerCase().includes(filter)) return;
+        const key = `${row._run}|${name}`;
+        if (!grouped.has(key)) {
+          grouped.set(key, { run: row._run, process: name, samples: 0, maxCpu: 0, maxMem: 0, maxIo: 0, categories: new Set() });
+        }
+        const g = grouped.get(key);
+        g.samples++;
+        g.categories.add(row.Category || "");
+        g.maxCpu = Math.max(g.maxCpu, toNum(row.CPU_Pct) || 0);
+        g.maxMem = Math.max(g.maxMem, toNum(row.WorkingSet_MB) || 0);
+        g.maxIo = Math.max(g.maxIo, toNum(row.IO_MBps) || 0);
+      });
+      const rows = [...grouped.values()].sort((a, b) => (b.maxCpu - a.maxCpu) || (b.maxIo - a.maxIo) || (b.maxMem - a.maxMem)).slice(0, 120);
+      renderTable("processTable", rows, [
+        ["process", "Process", r => escapeHtml(r.process)],
+        ["run", "Run", r => escapeHtml(r.run)],
+        ["maxCpu", "Max CPU %", r => fmtNumber(r.maxCpu)],
+        ["maxMem", "Max MB", r => fmtNumber(r.maxMem)],
+        ["maxIo", "Max IO MB/s", r => fmtNumber(r.maxIo)],
+        ["samples", "Rows", r => escapeHtml(r.samples)],
+        ["categories", "Categories", r => escapeHtml([...r.categories].filter(Boolean).join(", ")), "wrap"]
+      ]);
+    }
+
+    function renderNearbyProcessTable() {
+      if (!state.selectedTime) {
+        $("nearProcessTable").innerHTML = `<div class="empty">Select a timeline point or spike.</div>`;
+        return;
+      }
+      const center = state.selectedTime.getTime();
+      const filter = $("processFilter").value.trim().toLowerCase();
+      const rows = allActive("processes")
+        .filter(r => r._ms && Math.abs(r._ms - center) <= 90000)
+        .filter(r => !filter || JSON.stringify(r).toLowerCase().includes(filter))
+        .sort((a, b) => (toNum(b.CPU_Pct) || 0) - (toNum(a.CPU_Pct) || 0) || (toNum(b.IO_MBps) || 0) - (toNum(a.IO_MBps) || 0))
+        .slice(0, 160);
+
+      renderTable("nearProcessTable", rows, [
+        ["time", "Time", r => fmtTime(r._time), "mono"],
+        ["category", "Category", r => escapeHtml(r.Category || "")],
+        ["process", "Process", r => escapeHtml(r.Process || "")],
+        ["cpu", "CPU %", r => escapeHtml(r.CPU_Pct || "")],
+        ["mem", "MB", r => escapeHtml(r.WorkingSet_MB || "")],
+        ["io", "IO MB/s", r => escapeHtml(r.IO_MBps || "")]
+      ]);
+    }
+
+    function renderEventTable() {
+      const filter = $("processFilter").value.trim().toLowerCase();
+      const center = state.selectedTime ? state.selectedTime.getTime() : null;
+      let rows = allActive("events").filter(r => r._ms);
+      if (center) rows = rows.filter(r => Math.abs(r._ms - center) <= 10 * 60 * 1000);
+      if (filter) rows = rows.filter(r => JSON.stringify(r).toLowerCase().includes(filter));
+      rows = rows.sort((a, b) => b._ms - a._ms).slice(0, 160);
+      renderTable("eventTable", rows, [
+        ["time", "Time", r => fmtDateTime(r._time), "mono"],
+        ["level", "Level", r => escapeHtml(r.Level || "")],
+        ["provider", "Provider", r => escapeHtml(r.Provider || "")],
+        ["id", "ID", r => escapeHtml(r.Id || "")],
+        ["msg", "Message", r => escapeHtml(r.Message || ""), "wrap"]
+      ]);
+    }
+
+    function renderTable(containerId, rows, columns, onRowClick) {
+      const container = $(containerId);
+      if (!rows.length) {
+        container.innerHTML = `<div class="empty">No matching rows.</div>`;
+        return;
+      }
+      const sort = state.sort[containerId];
+      if (sort) {
+        const col = columns.find(c => c[0] === sort.key);
+        if (col) {
+          rows = [...rows].sort((a, b) => compareRendered(col[2](a), col[2](b)) * sort.dir);
+        }
+      }
+      container.innerHTML = `
+        <table>
+          <thead>
+            <tr>${columns.map(c => `<th data-key="${escapeHtml(c[0])}">${escapeHtml(c[1])}</th>`).join("")}</tr>
+          </thead>
+          <tbody>
+            ${rows.map((row, idx) => `<tr data-idx="${idx}">${columns.map(c => `<td class="${c[3] || ""}">${c[2](row)}</td>`).join("")}</tr>`).join("")}
+          </tbody>
+        </table>
+      `;
+      container.querySelectorAll("th").forEach(th => {
+        th.addEventListener("click", () => {
+          const key = th.dataset.key;
+          const existing = state.sort[containerId];
+          state.sort[containerId] = { key, dir: existing && existing.key === key ? -existing.dir : 1 };
+          redrawTables();
+        });
+      });
+      if (onRowClick) {
+        container.querySelectorAll("tbody tr").forEach(tr => {
+          tr.addEventListener("click", () => onRowClick(rows[Number(tr.dataset.idx)]));
+        });
+      }
+    }
+
+    function nearestByTime(rows, ms) {
+      let best = null;
+      let bestDist = Infinity;
+      rows.forEach(r => {
+        const dist = Math.abs(r._ms - ms);
+        if (dist < bestDist) {
+          best = r;
+          bestDist = dist;
+        }
+      });
+      return best;
+    }
+
+    function compareRendered(a, b) {
+      const ax = stripHtml(String(a));
+      const bx = stripHtml(String(b));
+      const an = toNum(ax);
+      const bn = toNum(bx);
+      if (an !== null && bn !== null) return an - bn;
+      return ax.localeCompare(bx);
+    }
+
+    function stripHtml(value) {
+      const div = document.createElement("div");
+      div.innerHTML = value;
+      return div.textContent || div.innerText || "";
+    }
+
+    function fmtDateTime(d) {
+      if (!d) return "";
+      return d.toLocaleString(undefined, { hour12: false });
+    }
+
+    function fmtTime(d) {
+      if (!d) return "";
+      return d.toLocaleTimeString(undefined, { hour12: false });
+    }
+
+    function fmtMs(value) {
+      if (value === null || value === undefined || !Number.isFinite(value)) return "";
+      return `${fmtNumber(value)} ms`;
+    }
+
+    function fmtNumber(value, suffix = "") {
+      if (value === null || value === undefined || value === "" || !Number.isFinite(Number(value))) return "";
+      const n = Number(value);
+      const text = Math.abs(n) >= 100 ? n.toFixed(0) : Math.abs(n) >= 10 ? n.toFixed(1) : n.toFixed(2);
+      return `${text}${suffix}`;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+  </script>
+</body>
+</html>
