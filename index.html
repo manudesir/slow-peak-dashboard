@@ -375,14 +375,12 @@
     <div class="topbar">
       <div>
         <h1>Slow Peak Monitor Dashboard</h1>
-        <div id="status" class="sub">Load monitor result files or a run folder.</div>
+        <div id="status" class="sub">Select an uploaded analysis.</div>
       </div>
       <div class="controls">
-        <label class="file-label primary" for="folderInput">Open run folder</label>
-        <input id="folderInput" type="file" multiple webkitdirectory>
-        <label class="file-label" for="fileInput">Open files</label>
-        <input id="fileInput" type="file" multiple accept=".csv,.txt,.md">
-        <button id="clearBtn" type="button">Clear</button>
+        <select id="analysisSelect" title="Select an uploaded analysis">
+          <option value="">Loading uploaded analyses...</option>
+        </select>
       </div>
     </div>
   </header>
@@ -392,7 +390,7 @@
       <div class="filters">
         <div class="filter-box">
           <label class="title" for="runSelect">Loaded folders</label>
-          <select id="runSelect" multiple title="All folders/result sets loaded from the selected files. Use Ctrl or Shift to keep several active."></select>
+          <select id="runSelect" multiple title="Folders/result sets loaded from the selected uploaded analysis. Use Ctrl or Shift to keep several active."></select>
         </div>
         <div class="filter-box">
           <label class="title">Timeline metrics</label>
@@ -421,9 +419,9 @@
           <p><b>Manual annotations matter.</b> A manual red band is when you personally felt the machine was unusable. If it lines up with sample gaps, query stalls, or UI delay, the monitor captured the same symptom.</p>
         </div>
         <div>
-          <p><b>Current hypothesis for the 11:09 run:</b> this does not look like RAM, CPU, or disk saturation. The strongest signal is Windows management/performance query stalling, possibly caused by a lower-level driver, security/VPN layer, or vendor service.</p>
-          <p><b>Ruled out for this run:</b> Windhawk was not running. Its service was stopped at the detected spike times, so it should not be treated as a live suspect for this dataset.</p>
-          <p><b>Most useful next tests:</b> compare one Chrome Incognito/extensions-disabled run and one VPN-disconnected run if possible. If one test removes the spikes, that component becomes the likely owner.</p>
+          <p><b>Use Session Analysis first.</b> It is generated from the selected uploaded analysis and explains what stalled, what the likely cause is, and what to test next.</p>
+          <p><b>Do not follow stale suspects.</b> A cause is only useful if it appears in the selected analysis data at the same time as the slow period.</p>
+          <p><b>Most useful comparisons:</b> run one capture with browser extensions disabled, one with VPN/security overlays disabled if possible, and one with physical temperatures watched.</p>
           <p><b>Useful filters:</b> try <span class="mono">chrome</span>, <span class="mono">MsMpEng</span>, <span class="mono">MsSense</span>, <span class="mono">SSLVpnClient</span>, <span class="mono">IDBWM</span>, <span class="mono">WmiPrvSE</span>, and <span class="mono">logioptionsplus</span>.</p>
         </div>
       </div>
@@ -503,13 +501,18 @@
       hoverTime: null,
       chartPoints: [],
       chartBounds: null,
-      sort: {}
+      sort: {},
+      analyses: [],
+      currentAnalysis: null
     };
 
     const storageKeys = {
+      lastAnalysis: "slowPeakDashboard.lastAnalysis.v1",
       lastFolder: "slowPeakDashboard.lastFolder.v1",
       selectedRuns: "slowPeakDashboard.selectedRuns.v1"
     };
+
+    const manifestPath = "data/manifest.json";
 
     const fileTypes = {
       "metrics.csv": "metrics",
@@ -668,8 +671,7 @@
 
     function init() {
       renderMetricList();
-      $("folderInput").addEventListener("change", e => loadFiles([...e.target.files]));
-      $("fileInput").addEventListener("change", e => loadFiles([...e.target.files]));
+      $("analysisSelect").addEventListener("change", e => loadHostedAnalysis(e.target.value));
       $("runSelect").addEventListener("change", () => {
         const selected = [...$("runSelect").selectedOptions].map(o => o.value);
         state.selectedRuns = new Set(selected);
@@ -677,7 +679,6 @@
         saveSelectedRuns();
         redrawAll();
       });
-      $("clearBtn").addEventListener("click", clearAll);
       $("logScale").addEventListener("change", redrawAll);
       $("showAnnotations").addEventListener("change", redrawAll);
       $("showDetectedSpikes").addEventListener("change", redrawAll);
@@ -690,10 +691,106 @@
       canvas.addEventListener("click", onChartClick);
       window.addEventListener("resize", drawTimeline);
       redrawAll();
+      loadHostedAnalyses();
     }
 
     function saveSelectedRuns() {
       localStorage.setItem(storageKeys.selectedRuns, JSON.stringify([...state.selectedRuns]));
+    }
+
+    async function loadHostedAnalyses() {
+      setStatus("Loading uploaded analyses...");
+      try {
+        const response = await fetch(`${manifestPath}?v=${Date.now()}`, { cache: "no-store" });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const manifest = await response.json();
+        state.analyses = Array.isArray(manifest.analyses) ? manifest.analyses : [];
+        renderAnalysisSelect();
+
+        const lastAnalysis = localStorage.getItem(storageKeys.lastAnalysis) || "";
+        const firstId = state.analyses[0] ? state.analyses[0].id : "";
+        const selectedId = state.analyses.some(a => a.id === lastAnalysis) ? lastAnalysis : firstId;
+        if (selectedId) {
+          $("analysisSelect").value = selectedId;
+          await loadHostedAnalysis(selectedId);
+        } else {
+          setStatus("No uploaded analyses are listed in data/manifest.json.");
+        }
+      } catch (err) {
+        state.analyses = [];
+        renderAnalysisSelect();
+        setStatus(`Could not load uploaded analysis manifest: ${err.message || err}`);
+      }
+    }
+
+    function renderAnalysisSelect() {
+      const select = $("analysisSelect");
+      select.innerHTML = "";
+      if (!state.analyses.length) {
+        const opt = document.createElement("option");
+        opt.value = "";
+        opt.textContent = "No uploaded analyses";
+        opt.disabled = true;
+        opt.selected = true;
+        select.appendChild(opt);
+        return;
+      }
+
+      state.analyses.forEach(analysis => {
+        const opt = document.createElement("option");
+        opt.value = analysis.id;
+        opt.textContent = analysis.label || analysis.id;
+        opt.title = analysis.description || analysis.id;
+        select.appendChild(opt);
+      });
+    }
+
+    async function loadHostedAnalysis(analysisId) {
+      const analysis = state.analyses.find(item => item.id === analysisId);
+      if (!analysis) return;
+
+      state.currentAnalysis = analysis;
+      localStorage.setItem(storageKeys.lastAnalysis, analysis.id);
+      resetLoadedData();
+      setStatus(`Loading uploaded analysis: ${analysis.label || analysis.id}...`);
+
+      const basePath = analysis.basePath || `data/${analysis.id}/`;
+      const files = Array.isArray(analysis.files) ? analysis.files : Object.keys(fileTypes);
+      const loadedFiles = [];
+      const missingFiles = [];
+
+      for (const entry of files) {
+        const relativePath = typeof entry === "string" ? entry : entry.path;
+        if (!relativePath) continue;
+        const url = `${basePath}${relativePath}`.replace(/\/{2,}/g, "/");
+        try {
+          const response = await fetch(`${url}?v=${encodeURIComponent(analysis.updatedAt || "")}`, { cache: "no-store" });
+          if (!response.ok) {
+            missingFiles.push(relativePath);
+            continue;
+          }
+          const text = await response.text();
+          const name = relativePath.split(/[\\/]/).pop();
+          loadedFiles.push({
+            name,
+            webkitRelativePath: `${analysis.id}/${relativePath}`,
+            text: () => Promise.resolve(text)
+          });
+        } catch {
+          missingFiles.push(relativePath);
+        }
+      }
+
+      if (!loadedFiles.length) {
+        setStatus(`No readable files found for uploaded analysis: ${analysis.label || analysis.id}.`);
+        redrawAll();
+        return;
+      }
+
+      await loadFiles(loadedFiles);
+      if (missingFiles.length) {
+        setStatus(`${activeRuns().length} result set(s) loaded from ${analysis.label || analysis.id}. Missing optional file(s): ${missingFiles.join(", ")}.`);
+      }
     }
 
     function renderMetricList() {
@@ -735,12 +832,10 @@
       redrawAll();
     }
 
-    function clearAll() {
+    function resetLoadedData() {
       state.runs.clear();
       state.selectedRuns.clear();
       state.selectedTime = null;
-      $("folderInput").value = "";
-      $("fileInput").value = "";
       rebuildRunSelect();
       saveSelectedRuns();
       redrawAll();
@@ -933,7 +1028,7 @@
       const samples = allActive("metrics").length;
       const spikes = allSpikesAndAnnotations().length;
       if (!runs.length) {
-        setStatus("Load monitor result files or a run folder.");
+        setStatus("Select an uploaded analysis.");
       } else {
         setStatus(`${runs.length} result set(s), ${samples} samples, ${spikes} spike/annotation rows loaded.`);
       }
