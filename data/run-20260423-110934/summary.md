@@ -9,6 +9,7 @@ Generated: 2026-04-23T11:19:45.1839249+02:00
 - Processes: `processes.csv`
 - Events: `events.csv`
 - Spikes: `spikes.csv`
+- Hardware health: `hardware-health.md`
 
 ## Extremes
 
