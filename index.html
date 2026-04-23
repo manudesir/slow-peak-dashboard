@@ -144,6 +144,29 @@
       text-overflow: ellipsis;
     }
 
+    .analysis-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .analysis-block {
+      border-left: 3px solid var(--accent);
+      padding-left: 10px;
+      min-height: 92px;
+    }
+
+    .analysis-block h3 {
+      margin: 0 0 7px;
+      font-size: 13px;
+    }
+
+    .analysis-block p {
+      margin: 0;
+      color: #344054;
+      line-height: 1.45;
+    }
+
     section {
       padding: 14px;
     }
@@ -342,6 +365,7 @@
       }
       .controls { justify-content: flex-start; }
       .cards { grid-template-columns: repeat(2, minmax(130px, 1fr)); }
+      .analysis-grid { grid-template-columns: 1fr; }
       .metric-list { grid-template-columns: repeat(2, minmax(150px, 1fr)); }
     }
   </style>
@@ -406,6 +430,14 @@
     </section>
 
     <div id="cards" class="cards"></div>
+
+    <section>
+      <div class="section-title">
+        <h2>Session Analysis</h2>
+        <span class="status">Generated from the loaded metrics.</span>
+      </div>
+      <div id="sessionAnalysis" class="analysis-grid"></div>
+    </section>
 
     <section>
       <div class="section-title">
@@ -579,6 +611,46 @@
         value: r => toNum(r.DiskQueue),
         selected: false,
         help: "Average physical disk queue length. Sustained values above about 2 can indicate disk bottlenecking. In the captured run this stayed at 0 during spikes."
+      },
+      {
+        id: "sensorTemp",
+        label: "Sensor temp C",
+        color: "#ef4444",
+        value: r => bestTempC(r),
+        selected: false,
+        help: "Best available hardware temperature in Celsius for this sample. It prefers LibreHardwareMonitor/OpenHardwareMonitor sensors, then ACPI thermal zones, then storage temperature. Blank means no sensor was exposed."
+      },
+      {
+        id: "cpuTemp",
+        label: "CPU temp C",
+        color: "#f97316",
+        value: r => toNum(r.SensorCpuTempMaxC),
+        selected: false,
+        help: "Maximum CPU-related temperature sensor in Celsius from LibreHardwareMonitor or OpenHardwareMonitor WMI, when available. Windows built-in APIs often do not expose exact CPU temperature."
+      },
+      {
+        id: "gpuTemp",
+        label: "GPU temp C",
+        color: "#a855f7",
+        value: r => toNum(r.SensorGpuTempMaxC),
+        selected: false,
+        help: "Maximum GPU-related temperature sensor in Celsius from LibreHardwareMonitor or OpenHardwareMonitor WMI, when available. Blank means no GPU sensor was exposed to the monitor."
+      },
+      {
+        id: "storageTemp",
+        label: "Storage temp C",
+        color: "#0d9488",
+        value: r => toNum(r.StorageTempMaxC),
+        selected: false,
+        help: "Maximum storage device temperature in Celsius from Windows storage reliability counters. This is sampled less often by default to keep the monitor light."
+      },
+      {
+        id: "physicalQuery",
+        label: "Physical query ms",
+        color: "#475569",
+        value: r => toNum(r.PhysicalQueryMs),
+        selected: false,
+        help: "Time spent collecting physical metrics such as thermal zones, storage temperatures, battery status, and optional hardware-monitor sensors. High values mean sensor collection itself stalled."
       },
       {
         id: "pages",
@@ -770,6 +842,25 @@
       return Number.isFinite(n) ? n : null;
     }
 
+    function firstNumber(row, keys) {
+      for (const key of keys) {
+        const value = toNum(row[key]);
+        if (value !== null) return value;
+      }
+      return null;
+    }
+
+    function bestTempC(row) {
+      return firstNumber(row, ["SensorTempMaxC", "AcpiThermalZoneMaxC", "StorageTempMaxC"]);
+    }
+
+    function bestTempLabel(row) {
+      if (toNum(row.SensorTempMaxC) !== null) return "hardware sensor";
+      if (toNum(row.AcpiThermalZoneMaxC) !== null) return "ACPI zone";
+      if (toNum(row.StorageTempMaxC) !== null) return "storage";
+      return "";
+    }
+
     function parseCsv(text) {
       const rows = [];
       let row = [];
@@ -823,6 +914,7 @@
 
     function redrawAll() {
       renderCards();
+      renderSessionAnalysis();
       drawTimeline();
       redrawTables();
       updateStatus();
@@ -867,6 +959,8 @@
       const maxLoop = maxRow(metrics, r => toNum(r.LoopMs));
       const maxUi = maxRow(metrics, r => toNum(r.UiProbeMaxDelayMs));
       const maxSystem = maxRow(metrics, r => toNum(r.SystemQueryMs));
+      const maxTemp = maxRow(metrics, r => bestTempC(r));
+      const maxStorageTemp = maxRow(metrics, r => toNum(r.StorageTempMaxC));
       const lowResourceLag = metrics.filter(r => String(r.LowResourceLag).toLowerCase() === "true").length;
 
       const cards = [
@@ -877,6 +971,8 @@
         ["Max loop", fmtMs(maxLoop.value), maxLoop.row ? fmtTime(maxLoop.row._time) : ""],
         ["Max UI delay", fmtMs(maxUi.value), maxUi.row ? fmtTime(maxUi.row._time) : ""],
         ["Max system query", fmtMs(maxSystem.value), maxSystem.row ? fmtTime(maxSystem.row._time) : ""],
+        ["Max temp", fmtNumber(maxTemp.value, " C"), maxTemp.row ? `${fmtTime(maxTemp.row._time)} ${bestTempLabel(maxTemp.row)}` : ""],
+        ["Max storage temp", fmtNumber(maxStorageTemp.value, " C"), maxStorageTemp.row ? fmtTime(maxStorageTemp.row._time) : ""],
         ["Low-resource lag", lowResourceLag, "CPU <= 10% and commit <= 50%"]
       ];
 
@@ -897,6 +993,92 @@
         if (best.value === null || value > best.value) best = { row, value };
       });
       return best;
+    }
+
+    function renderSessionAnalysis() {
+      const root = $("sessionAnalysis");
+      const metrics = allActive("metrics").filter(r => r._ms);
+      const spikes = allSpikesAndAnnotations().filter(r => r._ms);
+      if (!metrics.length) {
+        root.innerHTML = `<div class="empty">Load a monitor run to generate the session analysis.</div>`;
+        return;
+      }
+
+      const maxGap = maxRow(metrics, r => toNum(r.SampleGapSeconds));
+      const maxScheduler = maxRow(metrics, r => toNum(r.SchedulerDelayMs));
+      const maxLoop = maxRow(metrics, r => toNum(r.LoopMs));
+      const maxSystem = maxRow(metrics, r => toNum(r.SystemQueryMs));
+      const maxProcess = maxRow(metrics, r => toNum(r.ProcessQueryMs));
+      const maxUi = maxRow(metrics, r => toNum(r.UiProbeMaxDelayMs));
+      const maxCpu = maxRow(metrics, r => toNum(r.CpuPct));
+      const maxMem = maxRow(metrics, r => toNum(r.CommitUsedPct));
+      const maxDisk = maxRow(metrics, r => toNum(r.DiskQueue));
+      const maxTemp = maxRow(metrics, r => bestTempC(r));
+      const maxStorageTemp = maxRow(metrics, r => toNum(r.StorageTempMaxC));
+
+      const responsivenessSignals = [
+        maxGap.value !== null && maxGap.value > 20 ? `sample gap reached ${fmtNumber(maxGap.value, "s")} at ${fmtTime(maxGap.row._time)}` : "",
+        maxScheduler.value !== null && maxScheduler.value > 3000 ? `scheduler delay reached ${fmtMs(maxScheduler.value)} at ${fmtTime(maxScheduler.row._time)}` : "",
+        maxLoop.value !== null && maxLoop.value > 20000 ? `monitor loop reached ${fmtMs(maxLoop.value)} at ${fmtTime(maxLoop.row._time)}` : "",
+        maxUi.value !== null && maxUi.value > 3000 ? `UI probe delay reached ${fmtMs(maxUi.value)} at ${fmtTime(maxUi.row._time)}` : ""
+      ].filter(Boolean);
+
+      const resourceSignals = [
+        maxCpu.value !== null ? `CPU max ${fmtNumber(maxCpu.value, "%")}` : "",
+        maxMem.value !== null ? `memory commit max ${fmtNumber(maxMem.value, "%")}` : "",
+        maxDisk.value !== null ? `disk queue max ${fmtNumber(maxDisk.value)}` : "",
+        maxTemp.value !== null ? `temperature max ${fmtNumber(maxTemp.value, " C")} (${bestTempLabel(maxTemp.row)})` : ""
+      ].filter(Boolean);
+
+      const normalResources =
+        (maxCpu.value === null || maxCpu.value <= 50) &&
+        (maxMem.value === null || maxMem.value <= 75) &&
+        (maxDisk.value === null || maxDisk.value <= 2);
+      const queryStall =
+        (maxSystem.value !== null && maxSystem.value > 5000) ||
+        (maxProcess.value !== null && maxProcess.value > 5000);
+      const thermalConcern =
+        (maxTemp.value !== null && maxTemp.value >= 95) ||
+        (maxStorageTemp.value !== null && maxStorageTemp.value >= 70);
+
+      const whatHappened = responsivenessSignals.length
+        ? `The run contains real responsiveness stalls: ${responsivenessSignals.join("; ")}. ${spikes.length ? `${spikes.length} detected/manual spike rows are loaded.` : "No separate spike rows are loaded."}`
+        : `No large responsiveness stall is visible in the active metrics. ${spikes.length ? `${spikes.length} spike/annotation rows are loaded, so click them to inspect nearby samples.` : "Load a longer run or add manual annotations if you felt a slow period."}`;
+
+      let whySlow = "";
+      if (queryStall && normalResources) {
+        whySlow = `The strongest signal is Windows management/process enumeration stalling while ordinary resource counters stay moderate. That fits symptoms like Task Manager taking a long time to open and app switching lagging even without high CPU or RAM. Resource snapshot: ${resourceSignals.join("; ")}.`;
+      } else if (thermalConcern) {
+        whySlow = `Thermal data is high enough to treat throttling or hardware heat as a serious candidate. Resource snapshot: ${resourceSignals.join("; ")}.`;
+      } else if (maxDisk.value !== null && maxDisk.value > 2) {
+        whySlow = `Disk queue rose high enough to support a storage bottleneck hypothesis. Resource snapshot: ${resourceSignals.join("; ")}.`;
+      } else if (!normalResources) {
+        whySlow = `One or more normal resource counters rose during the session, so compare the timeline before blaming Windows responsiveness alone. Resource snapshot: ${resourceSignals.join("; ")}.`;
+      } else {
+        whySlow = `The data does not support simple CPU, memory, disk, or thermal saturation as the main cause. Resource snapshot: ${resourceSignals.join("; ") || "no resource counters available"}.`;
+      }
+
+      let nextTest = "";
+      if (thermalConcern) {
+        nextTest = "Run another 10 to 20 minute capture with the machine cooled, vents clear, and power mode unchanged. If slow peaks disappear when temperatures stay lower, focus on cooling, fans, dust, power mode, or thermal throttling.";
+      } else if (queryStall) {
+        nextTest = "Run one comparison without VPN/security overlays if you can, then one Chrome Incognito/extensions-disabled run. If the CIM/process-query stalls remain in both, the next target is a driver, WMI provider, or vendor background service.";
+      } else if (maxDisk.value !== null && maxDisk.value > 2) {
+        nextTest = "Run an elevated capture and check storage health. If disk queue and latency spike together, inspect the SSD/HDD health, antivirus scanning, indexing, sync tools, and firmware.";
+      } else {
+        nextTest = "Run a longer capture with manual annotations during each slow peak. The best next clue is whether the manual slow bands align with sample gaps, UI probe delay, process query stalls, physical temperatures, or a specific process/event.";
+      }
+
+      root.innerHTML = [
+        ["What happened", whatHappened],
+        ["Why it was slow", whySlow],
+        ["What to test next", nextTest]
+      ].map(([title, body]) => `
+        <div class="analysis-block">
+          <h3>${escapeHtml(title)}</h3>
+          <p>${escapeHtml(body)}</p>
+        </div>
+      `).join("");
     }
 
     function drawTimeline() {
@@ -1145,6 +1327,9 @@
         const process = toNum(r.ProcessQueryMs);
         const system = toNum(r.SystemQueryMs);
         const disk = toNum(r.DiskQueue);
+        const cpuTemp = toNum(r.SensorCpuTempMaxC);
+        const gpuTemp = toNum(r.SensorGpuTempMaxC);
+        const storageTemp = toNum(r.StorageTempMaxC);
         if (gap !== null && gap > 20) reasons.push("SampleGap");
         if (scheduler !== null && scheduler > 3000) reasons.push("SchedulerDelay");
         if (loop !== null && loop > 20000) reasons.push("MonitorLoop");
@@ -1153,6 +1338,7 @@
         if (system !== null && system > 5000) reasons.push("CimPerfQuery");
         if (disk !== null && disk > 2) reasons.push("DiskQueue");
         if (String(r.ForegroundResponsive).toLowerCase() === "false") reasons.push("ForegroundNotResponding");
+        if ((cpuTemp !== null && cpuTemp >= 95) || (gpuTemp !== null && gpuTemp >= 95) || (storageTemp !== null && storageTemp >= 70)) reasons.push("ThermalHigh");
         if (reasons.length) {
           rows.push({
             ...r,
@@ -1175,8 +1361,10 @@
         const gap = row.SampleGapSeconds || "";
         const loop = row.LoopMs || "";
         const ui = row.UiProbeMaxDelayMs || "";
+        const temp = bestTempC(row);
+        const tempLabel = bestTempLabel(row);
         const fg = row.ForegroundProcess || "";
-        return { source, time, note, cpu, mem, gap, loop, ui, fg, raw: row };
+        return { source, time, note, cpu, mem, gap, loop, ui, temp, tempLabel, fg, raw: row };
       });
 
       renderTable("spikeTable", rows, [
@@ -1187,6 +1375,7 @@
         ["mem", "Mem %", r => escapeHtml(r.mem)],
         ["gap", "Gap s", r => escapeHtml(r.gap)],
         ["loop", "Loop ms", r => escapeHtml(r.loop)],
+        ["temp", "Temp C", r => escapeHtml(r.temp === null ? "" : `${fmtNumber(r.temp)} ${r.tempLabel}`)],
         ["ui", "UI ms", r => escapeHtml(r.ui)],
         ["fg", "Foreground", r => escapeHtml(r.fg)]
       ], row => {
@@ -1224,6 +1413,16 @@
         ["Disk queue", fmtNumber(toNum(selected.DiskQueue))],
         ["Disk MB/s", fmtNumber(toNum(selected.DiskMBps))],
         ["Pages/sec", fmtNumber(toNum(selected.PagesPerSec))],
+        ["Best temperature", fmtNumber(bestTempC(selected), " C")],
+        ["Temperature source", bestTempLabel(selected)],
+        ["CPU sensor temp", fmtNumber(toNum(selected.SensorCpuTempMaxC), " C")],
+        ["GPU sensor temp", fmtNumber(toNum(selected.SensorGpuTempMaxC), " C")],
+        ["ACPI thermal max", fmtNumber(toNum(selected.AcpiThermalZoneMaxC), " C")],
+        ["Storage temp max", fmtNumber(toNum(selected.StorageTempMaxC), " C")],
+        ["Battery charge", fmtNumber(toNum(selected.BatteryChargePct), "%")],
+        ["Battery status", selected.BatteryStatus || ""],
+        ["Physical query", fmtMs(toNum(selected.PhysicalQueryMs))],
+        ["Physical sample age", fmtNumber(toNum(selected.PhysicalSampleAgeSeconds), "s")],
         ["Foreground", selected.ForegroundProcess || ""],
         ["Spike reasons", selected.SpikeReasons || ""]
       ];
