@@ -1,0 +1,16 @@
+﻿Slow Peak Monitor Startup Info
+Started: 2026-04-23T11:09:34.3876827+02:00
+RunDir: C:\Users\EmmanuelDesir\Documents\Codex\2026-04-22-can-you-investigate-why-my-computer\slow-peak-monitor-runs\run-20260423-110934
+IsAdmin: False
+Computer: EDESIR
+User: EmmanuelDesir
+
+OS: Microsoft Windows 11 Business 10.0.26200
+LastBoot: 04/23/2026 09:24:19
+RAM_GB: 31.66
+LogicalProcessors: 20
+CPU: 13th Gen Intel(R) Core(TM) i7-1370P
+
+Active network adapters:
+  Wi-Fi | Intel(R) Wi-Fi 6E AX211 160MHz | 1.2 Gbps
+  vEthernet (WSL (Hyper-V firewall)) | Hyper-V Virtual Ethernet Adapter | 10 Gbps
