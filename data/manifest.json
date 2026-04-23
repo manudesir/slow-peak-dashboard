@@ -17,6 +17,7 @@
         "services-on-spikes.csv",
         "commands-on-spikes.csv",
         "startup-info.txt",
+        "hardware-health.md",
         "summary.md",
         "plain-language-analysis.md"
       ]
