@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "updatedAt": "2026-04-23T00:00:00+02:00",
+  "analyses": [
+    {
+      "id": "run-20260423-110934",
+      "label": "2026-04-23 11:09 slow peak test",
+      "description": "Ten minute monitor run with manual slow peak annotations around 11:12 and 11:18.",
+      "basePath": "data/run-20260423-110934/",
+      "updatedAt": "2026-04-23T11:56:23+02:00",
+      "files": [
+        "metrics.csv",
+        "spikes.csv",
+        "processes.csv",
+        "events.csv",
+        "annotations.csv",
+        "services-on-spikes.csv",
+        "commands-on-spikes.csv",
+        "startup-info.txt",
+        "summary.md",
+        "plain-language-analysis.md"
+      ]
+    }
+  ]
+}
